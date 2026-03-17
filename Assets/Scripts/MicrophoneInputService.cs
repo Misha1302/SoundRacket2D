@@ -2,8 +2,7 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// Captures microphone audio and exposes loudness metrics for gameplay systems.
-/// Uses Unity's built-in Microphone API only.
+/// Captures microphone loudness using Unity Microphone API and exposes normalized power (0..1).
 /// </summary>
 public sealed class MicrophoneInputService : MonoBehaviour
 {
@@ -13,12 +12,14 @@ public sealed class MicrophoneInputService : MonoBehaviour
     [Header("Capture")]
     [SerializeField, Min(8000)] private int targetSampleRate = 44100;
     [SerializeField, Min(1)] private int clipLengthSeconds = 1;
-    [SerializeField, Min(0.01f)] private float startupTimeoutSeconds = 2f;
+    [SerializeField, Min(0.1f)] private float startupTimeoutSeconds = 2f;
 
     [Header("Analysis")]
-    [SerializeField, Min(16)] private int analysisWindowSize = 1024;
+    [SerializeField, Min(64)] private int analysisWindowSize = 1024;
     [SerializeField, Min(0.01f)] private float loudnessRiseSpeed = 12f;
     [SerializeField, Min(0.01f)] private float loudnessFallSpeed = 8f;
+    [SerializeField, Min(0.00001f)] private float silenceRms = 0.005f;
+    [SerializeField, Min(0.00002f)] private float loudRms = 0.08f;
 
     public event Action CaptureStarted;
     public event Action CaptureStopped;
@@ -27,25 +28,27 @@ public sealed class MicrophoneInputService : MonoBehaviour
     public bool IsCapturing { get; private set; }
     public bool IsInitialized { get; private set; }
     public string ActiveDeviceName { get; private set; } = string.Empty;
+    public string StatusMessage { get; private set; } = "Idle";
     public float RawLoudness { get; private set; }
     public float SmoothedLoudness { get; private set; }
-
-    private const float SilenceFloor = 1e-7f;
+    public float NormalizedLoudness01 { get; private set; }
 
     private AudioClip microphoneClip;
     private float[] sampleBuffer;
     private float startupDeadlineTime;
     private bool waitingForStart;
 
-    private void OnEnable()
+    private void OnValidate()
     {
-        StartCapture();
+        if (loudRms <= silenceRms)
+        {
+            loudRms = silenceRms + 0.001f;
+        }
     }
 
-    private void OnDisable()
-    {
-        StopCapture();
-    }
+    private void OnEnable() => StartCapture();
+
+    private void OnDisable() => StopCapture();
 
     private void Update()
     {
@@ -60,13 +63,17 @@ public sealed class MicrophoneInputService : MonoBehaviour
             return;
         }
 
+        if (!Microphone.IsRecording(ActiveDeviceName))
+        {
+            FailCapture("Microphone capture stopped unexpectedly.");
+            return;
+        }
+
         RawLoudness = ReadLatestWindowRms();
         SmoothedLoudness = SmoothLoudness(SmoothedLoudness, RawLoudness, Time.deltaTime);
+        NormalizedLoudness01 = Mathf.Clamp01(Mathf.InverseLerp(silenceRms, loudRms, SmoothedLoudness));
     }
 
-    /// <summary>
-    /// Starts microphone capture. Safe to call repeatedly.
-    /// </summary>
     public void StartCapture()
     {
         if (IsCapturing || waitingForStart)
@@ -105,11 +112,9 @@ public sealed class MicrophoneInputService : MonoBehaviour
         sampleBuffer = new float[Mathf.Min(analysisWindowSize, microphoneClip.samples)];
         waitingForStart = true;
         startupDeadlineTime = Time.realtimeSinceStartup + startupTimeoutSeconds;
+        StatusMessage = "Starting microphone...";
     }
 
-    /// <summary>
-    /// Stops microphone capture and clears analysis state.
-    /// </summary>
     public void StopCapture()
     {
         var wasRunning = IsCapturing || waitingForStart;
@@ -127,9 +132,9 @@ public sealed class MicrophoneInputService : MonoBehaviour
                     Microphone.End(ActiveDeviceName);
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Debug.LogWarning($"Error while stopping microphone '{ActiveDeviceName}': {ex.Message}");
+                // Ignore platform-specific stop errors to avoid noisy logs.
             }
         }
 
@@ -138,6 +143,8 @@ public sealed class MicrophoneInputService : MonoBehaviour
         ActiveDeviceName = string.Empty;
         RawLoudness = 0f;
         SmoothedLoudness = 0f;
+        NormalizedLoudness01 = 0f;
+        StatusMessage = "Stopped";
 
         if (wasRunning)
         {
@@ -145,31 +152,17 @@ public sealed class MicrophoneInputService : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Restarts capture by stopping and starting again.
-    /// </summary>
     public void RestartCapture()
     {
         StopCapture();
         StartCapture();
     }
 
-    public float GetSoundLoudness()
-    {
-        return SmoothedLoudness;
-    }
+    public float GetSoundLoudness() => SmoothedLoudness;
 
-    public float GetSoundLoudnessRaw()
-    {
-        return RawLoudness;
-    }
+    public float GetSoundLoudnessRaw() => RawLoudness;
 
-    public float GetSoundLoudnessDecibels(float minDecibels = -80f)
-    {
-        var linear = Mathf.Max(RawLoudness, SilenceFloor);
-        var decibels = 20f * Mathf.Log10(linear);
-        return Mathf.Max(decibels, minDecibels);
-    }
+    public float GetNormalizedLoudness01() => NormalizedLoudness01;
 
     private void PollForCaptureStart()
     {
@@ -195,6 +188,7 @@ public sealed class MicrophoneInputService : MonoBehaviour
             waitingForStart = false;
             IsCapturing = true;
             IsInitialized = true;
+            StatusMessage = $"Mic: {ActiveDeviceName}";
             CaptureStarted?.Invoke();
             return;
         }
@@ -213,7 +207,7 @@ public sealed class MicrophoneInputService : MonoBehaviour
         }
 
         var writePosition = Microphone.GetPosition(ActiveDeviceName);
-        if (writePosition <= 0)
+        if (writePosition < 0)
         {
             return 0f;
         }
@@ -221,7 +215,6 @@ public sealed class MicrophoneInputService : MonoBehaviour
         var clipSamples = microphoneClip.samples;
         var windowSize = sampleBuffer.Length;
         var readPosition = writePosition - windowSize;
-
         if (readPosition < 0)
         {
             readPosition += clipSamples;
@@ -266,8 +259,6 @@ public sealed class MicrophoneInputService : MonoBehaviour
                     return devices[i];
                 }
             }
-
-            Debug.LogWarning($"Preferred microphone '{preferredDeviceName}' not found. Falling back to '{devices[0]}'.");
         }
 
         return devices[0];
@@ -278,7 +269,6 @@ public sealed class MicrophoneInputService : MonoBehaviour
         try
         {
             Microphone.GetDeviceCaps(deviceName, out var minFreq, out var maxFreq);
-
             if (minFreq == 0 && maxFreq == 0)
             {
                 return requestedRate;
@@ -291,17 +281,24 @@ public sealed class MicrophoneInputService : MonoBehaviour
 
             return Mathf.Max(requestedRate, minFreq);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Debug.LogWarning($"Could not read device caps for '{deviceName}'. Using requested sample rate. Error: {ex.Message}");
             return requestedRate;
         }
     }
 
     private void FailCapture(string reason)
     {
-        Debug.LogError($"[MicrophoneInputService] {reason}");
+        var wasRunning = IsCapturing || waitingForStart;
         StopCapture();
+        StatusMessage = reason;
+
+        if (wasRunning)
+        {
+            CaptureFailed?.Invoke(reason);
+            return;
+        }
+
         CaptureFailed?.Invoke(reason);
     }
 
@@ -311,12 +308,8 @@ public sealed class MicrophoneInputService : MonoBehaviour
         IsInitialized = false;
         RawLoudness = 0f;
         SmoothedLoudness = 0f;
+        NormalizedLoudness01 = 0f;
         ActiveDeviceName = string.Empty;
+        StatusMessage = "Idle";
     }
-
-    /*
-     * macOS note:
-     * In Unity Player Settings, set "Microphone Usage Description".
-     * Unity maps this to NSMicrophoneUsageDescription in the app Info.plist.
-     */
 }
