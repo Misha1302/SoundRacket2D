@@ -23,25 +23,8 @@ public sealed class RocketFlightController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        var power01 = inputModeController == null ? 0f : inputModeController.CurrentPower01;
-        if (power01 > 0f)
-        {
-            rb.AddForce(Vector2.up * (power01 * maxUpwardForce), ForceMode2D.Force);
-        }
-        else
-        {
-            var velocity = rb.velocity;
-            if (velocity.y > 0f)
-            {
-                velocity.y = Mathf.MoveTowards(velocity.y, 0f, releaseDamping * Time.fixedDeltaTime);
-                rb.velocity = velocity;
-            }
-        }
-
-        if (rb.velocity.y > maxVerticalSpeed)
-        {
-            rb.velocity = new Vector2(rb.velocity.x, maxVerticalSpeed);
-        }
+        var power01 = inputModeController.CurrentPower01;
+        rb.velocity = new Vector2(rb.velocity.x, power01 * maxVerticalSpeed);
     }
 
     public void ResetToStart()

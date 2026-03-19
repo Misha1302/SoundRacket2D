@@ -544,14 +544,13 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1226652913}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f67cca3a1fb620fc7b5853c1e1b9b1ff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   microphoneInputService: {fileID: 2128291956}
   activationThreshold: 0.01
-  maxLoudnessForFullForce: 0.25
   maxUpwardForce: 300
 --- !u!50 &1226652917
 Rigidbody2D:
@@ -625,6 +624,100 @@ BoxCollider2D:
   serializedVersion: 2
   m_Size: {x: 4.878995, y: 10.92638}
   m_EdgeRadius: 0
+--- !u!1 &1527837116
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1527837118}
+  - component: {fileID: 1527837117}
+  m_Layer: 0
+  m_Name: '[KeyboardInput]'
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1527837117
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1527837116}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5ec0560174b74e70a6089b9ad081ef3b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  inputKey: 32
+  riseSpeed: 15
+  fallSpeed: 10
+--- !u!4 &1527837118
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1527837116}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.4008969, y: -0.33484644, z: 0.043719687}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1924366396
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1924366398}
+  - component: {fileID: 1924366397}
+  m_Layer: 0
+  m_Name: '[Input]'
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1924366397
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1924366396}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a6c67d2d3ee46b488775be617ea4aa5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  startMode: 0
+  microphoneInputService: {fileID: 2128291956}
+  keyboardInputService: {fileID: 1527837117}
+--- !u!4 &1924366398
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1924366396}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.4008969, y: -0.33484644, z: 0.043719687}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2010341956
 GameObject:
   m_ObjectHideFlags: 0
@@ -806,7 +899,7 @@ GameObject:
   - component: {fileID: 2128291957}
   - component: {fileID: 2128291956}
   m_Layer: 0
-  m_Name: Micro
+  m_Name: '[MicrophoneInput]'
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -831,6 +924,8 @@ MonoBehaviour:
   analysisWindowSize: 1024
   loudnessRiseSpeed: 12
   loudnessFallSpeed: 8
+  silenceRms: 0.005
+  loudRms: 0.08
 --- !u!4 &2128291957
 Transform:
   m_ObjectHideFlags: 0
@@ -856,4 +951,6 @@ SceneRoots:
   - {fileID: 2010341959}
   - {fileID: 1226652915}
   - {fileID: 2128291957}
+  - {fileID: 1527837118}
+  - {fileID: 1924366398}
   - {fileID: 194256732}
