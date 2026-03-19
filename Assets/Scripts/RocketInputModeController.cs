@@ -12,13 +12,9 @@ public sealed class RocketInputModeController : MonoBehaviour
     [SerializeField] private MicrophoneInputService microphoneInputService;
     [SerializeField] private KeyboardInputService keyboardInputService;
 
-    public InputMode CurrentMode { get; private set; }
+    public InputMode CurrentMode { get => startMode; private set => startMode = value; }
     public float CurrentPower01 { get; private set; }
-
-    private void Awake()
-    {
-        CurrentMode = startMode;
-    }
+    
 
     private void Update()
     {

@@ -4,9 +4,7 @@ using UnityEngine;
 public sealed class RocketFlightController : MonoBehaviour
 {
     [SerializeField] private RocketInputModeController inputModeController;
-    [SerializeField, Min(0f)] private float maxUpwardForce = 15f;
     [SerializeField, Min(0.1f)] private float maxVerticalSpeed = 8f;
-    [SerializeField, Min(0f)] private float releaseDamping = 2.5f;
 
     private Rigidbody2D rb;
     private Vector3 startPosition;
