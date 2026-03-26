@@ -1,5 +1,4 @@
 using System.Collections;
-using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
@@ -18,17 +17,8 @@ public sealed class AttemptSessionController : MonoBehaviour
     [SerializeField] private RocketInputModeController inputModeController;
     [SerializeField] private Rigidbody2D rocketRigidbody;
 
-    [Header("HUD")]
-    [SerializeField] private Image powerFillImage;
-    [SerializeField] private TMP_Text stateText;
-    [SerializeField] private TMP_Text modeText;
-    [SerializeField] private TMP_Text heightText;
-    [SerializeField] private TMP_Text resultText;
-    [SerializeField] private TMP_Text hintText;
-
     [Header("Gameplay")]
     [SerializeField, Min(0f)] private float startThreshold = 0.08f;
-    [SerializeField, Min(0f)] private float hudSmoothness = 10f;
     [SerializeField] private bool requireReleaseBetweenAttempts = true;
     [SerializeField] private bool freezePhysicsOutsideAttempt = true;
 
@@ -41,17 +31,12 @@ public sealed class AttemptSessionController : MonoBehaviour
     [SerializeField] private UnityEvent onAttemptStarted;
 
     private AttemptState _state;
-    private float _attemptTime;
-    private float _peakHeight;
-    private float _peakPower01;
-    private float _smoothedHudPower;
     private bool _armedForNextAttempt;
     private bool _isReloadingScene;
     private CanvasGroup _reloadFadeOverlay;
 
     public bool IsAttemptRunning => _state == AttemptState.Running;
-    public float PeakHeightCurrentAttempt => _peakHeight;
-    public float PeakPowerCurrentAttempt01 => _peakPower01;
+    public KeyCode ReloadSceneKey => reloadSceneKey;
 
     private void Reset()
     {
@@ -74,7 +59,7 @@ public sealed class AttemptSessionController : MonoBehaviour
 
     private void Start()
     {
-        GoToWaitingState(clearResultText: true);
+        GoToWaitingState();
     }
 
     private void Update()
@@ -94,8 +79,6 @@ public sealed class AttemptSessionController : MonoBehaviour
             _armedForNextAttempt = true;
         }
 
-        UpdateHud(power01);
-
         switch (_state)
         {
             case AttemptState.WaitingForInput:
@@ -103,14 +86,18 @@ public sealed class AttemptSessionController : MonoBehaviour
                 break;
 
             case AttemptState.Running:
-                UpdateRunningAttempt(power01);
                 break;
         }
     }
 
     public void RestartNow()
     {
-        GoToWaitingState(clearResultText: false);
+        if (_isReloadingScene)
+        {
+            return;
+        }
+
+        StartCoroutine(ReloadSceneWithFadeCoroutine());
     }
 
     private void TryStartAttempt(float power01)
@@ -131,9 +118,6 @@ public sealed class AttemptSessionController : MonoBehaviour
     private void StartAttempt()
     {
         _state = AttemptState.Running;
-        _attemptTime = 0f;
-        _peakHeight = 0f;
-        _peakPower01 = 0f;
         _armedForNextAttempt = false;
 
         if (rocketFlightController != null)
@@ -143,38 +127,12 @@ public sealed class AttemptSessionController : MonoBehaviour
         }
 
         SetPhysicsActive(true);
-
-        if (resultText != null)
-        {
-            resultText.text = "Рекорд попытки: 0.0 м";
-        }
-
         onAttemptStarted?.Invoke();
     }
 
-    private void UpdateRunningAttempt(float power01)
-    {
-        _attemptTime += Time.deltaTime;
-        _peakPower01 = Mathf.Max(_peakPower01, power01);
-
-        if (rocketFlightController != null)
-        {
-            _peakHeight = Mathf.Max(_peakHeight, Mathf.Max(0f, rocketFlightController.HeightFromStart));
-        }
-
-        if (resultText != null)
-        {
-            resultText.text = $"Рекорд попытки: {_peakHeight:0.0} м";
-        }
-    }
-
-    private void GoToWaitingState(bool clearResultText)
+    private void GoToWaitingState()
     {
         _state = AttemptState.WaitingForInput;
-        _attemptTime = 0f;
-        _peakHeight = 0f;
-        _peakPower01 = 0f;
-        _smoothedHudPower = 0f;
         _armedForNextAttempt = !requireReleaseBetweenAttempts;
 
         if (rocketFlightController != null)
@@ -184,11 +142,6 @@ public sealed class AttemptSessionController : MonoBehaviour
         }
 
         SetPhysicsActive(false);
-
-        if (clearResultText && resultText != null)
-        {
-            resultText.text = "Рекорд попытки: 0.0 м";
-        }
     }
 
     private void SetPhysicsActive(bool active)
@@ -205,95 +158,6 @@ public sealed class AttemptSessionController : MonoBehaviour
         {
             rocketRigidbody.simulated = active;
         }
-    }
-
-    private void UpdateHud(float rawPower01)
-    {
-        _smoothedHudPower = Mathf.Lerp(
-            _smoothedHudPower,
-            rawPower01,
-            1f - Mathf.Exp(-hudSmoothness * Time.unscaledDeltaTime));
-
-        if (powerFillImage != null)
-        {
-            powerFillImage.fillAmount = _smoothedHudPower;
-        }
-
-        if (modeText != null && inputModeController != null)
-        {
-            modeText.text = inputModeController.CurrentMode == RocketInputModeController.InputMode.Voice
-                ? "Режим: микрофон"
-                : "Режим: кнопка";
-        }
-
-        if (heightText != null)
-        {
-            float height = rocketFlightController == null
-                ? 0f
-                : Mathf.Max(0f, rocketFlightController.HeightFromStart);
-
-            heightText.text = $"Высота: {height:0.0} м";
-        }
-
-        if (stateText != null)
-        {
-            stateText.text = _state switch
-            {
-                AttemptState.WaitingForInput => "Готово",
-                AttemptState.Running => "Игра идет",
-                _ => string.Empty
-            };
-        }
-
-        if (hintText != null)
-        {
-            hintText.text = BuildHintText();
-        }
-    }
-
-    private string BuildHintText()
-    {
-        if (_state == AttemptState.Running)
-        {
-            return $"Нажми {GetReadableKeyName(reloadSceneKey)} для завершения игры";
-        }
-
-        if (inputModeController == null)
-        {
-            return "Назначь ссылки в инспекторе";
-        }
-
-        return inputModeController.CurrentMode == RocketInputModeController.InputMode.Voice
-            ? "Кричи в микрофон, чтобы запустить ракету"
-            : "Удерживай кнопку, чтобы запустить ракету";
-    }
-
-    private static string GetReadableKeyName(KeyCode keyCode)
-    {
-        return keyCode switch
-        {
-            KeyCode.Alpha0 => "0",
-            KeyCode.Alpha1 => "1",
-            KeyCode.Alpha2 => "2",
-            KeyCode.Alpha3 => "3",
-            KeyCode.Alpha4 => "4",
-            KeyCode.Alpha5 => "5",
-            KeyCode.Alpha6 => "6",
-            KeyCode.Alpha7 => "7",
-            KeyCode.Alpha8 => "8",
-            KeyCode.Alpha9 => "9",
-            KeyCode.Keypad0 => "Num 0",
-            KeyCode.Keypad1 => "Num 1",
-            KeyCode.Keypad2 => "Num 2",
-            KeyCode.Keypad3 => "Num 3",
-            KeyCode.Keypad4 => "Num 4",
-            KeyCode.Keypad5 => "Num 5",
-            KeyCode.Keypad6 => "Num 6",
-            KeyCode.Keypad7 => "Num 7",
-            KeyCode.Keypad8 => "Num 8",
-            KeyCode.Keypad9 => "Num 9",
-            _ => keyCode.ToString()
-        };
     }
 
     private IEnumerator ReloadSceneWithFadeCoroutine()

@@ -1,3 +1,4 @@
+using System.Globalization;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -5,16 +6,16 @@ using UnityEngine.UI;
 public sealed class RocketHudPresenterTMP : MonoBehaviour
 {
     [SerializeField] private RocketInputModeController inputModeController;
-    [SerializeField] private AttemptResultTracker attemptResultTracker;
+    [SerializeField] private RocketFlightController rocketFlightController;
     [SerializeField] private MicrophoneInputService microphoneInputService;
+    [SerializeField] private AttemptSessionController attemptSessionController;
 
     [Header("TMP Labels")]
     [SerializeField] private TMP_Text modeText;
-    [SerializeField] private TMP_Text currentPowerText;
-    [SerializeField] private TMP_Text peakPowerText;
     [SerializeField] private TMP_Text heightText;
-    [SerializeField] private TMP_Text resultText;
+    [SerializeField] private TMP_Text stateText;
     [SerializeField] private TMP_Text statusText;
+    [SerializeField] private TMP_Text hintText;
 
     [Header("Power Visual")]
     [SerializeField] private Image powerFillImage;
@@ -23,24 +24,22 @@ public sealed class RocketHudPresenterTMP : MonoBehaviour
     [SerializeField] private Color inactiveBarColor = new Color(1f, 0.72f, 0.18f, 0.08f);
     [SerializeField, Min(0.01f)] private float powerSmoothSpeed = 12f;
 
-    [Header("Result Visual")]
-    [SerializeField] private bool padResultToFourDigits = true;
-    [SerializeField] private bool resultUsesMetersRounded = true;
+    [Header("Height Text")]
+    [SerializeField] private bool digitsOnly = true;
+    [SerializeField] private string digitsFormat = "000.0";
 
     private float _displayedPower01;
 
     private void Update()
     {
-        float rawPower01 = attemptResultTracker != null
-            ? Mathf.Clamp01(attemptResultTracker.CurrentPower01)
-            : inputModeController == null
-                ? 0f
-                : Mathf.Clamp01(inputModeController.CurrentPower01);
+        float rawPower01 = inputModeController == null
+            ? 0f
+            : Mathf.Clamp01(inputModeController.CurrentPower01);
 
         _displayedPower01 = SmoothExp(_displayedPower01, rawPower01, powerSmoothSpeed, Time.deltaTime);
 
         UpdatePowerVisuals(_displayedPower01);
-        UpdateTexts(rawPower01);
+        UpdateTexts();
     }
 
     private void UpdatePowerVisuals(float power01)
@@ -67,13 +66,12 @@ public sealed class RocketHudPresenterTMP : MonoBehaviour
                 continue;
             }
 
-            bool active = i < activeCount;
             bar.enabled = true;
-            bar.color = active ? activeBarColor : inactiveBarColor;
+            bar.color = i < activeCount ? activeBarColor : inactiveBarColor;
         }
     }
 
-    private void UpdateTexts(float rawPower01)
+    private void UpdateTexts()
     {
         if (modeText != null && inputModeController != null)
         {
@@ -82,41 +80,36 @@ public sealed class RocketHudPresenterTMP : MonoBehaviour
                 : "КНОПКА";
         }
 
-        if (currentPowerText != null)
-        {
-            currentPowerText.text = $"{Mathf.RoundToInt(rawPower01 * 100f)}%";
-        }
-
-        if (peakPowerText != null)
-        {
-            float peakPower01 = attemptResultTracker == null ? 0f : attemptResultTracker.PeakPower01;
-            peakPowerText.text = $"{Mathf.RoundToInt(peakPower01 * 100f)}%";
-        }
-
         if (heightText != null)
         {
-            float maxHeight = attemptResultTracker == null ? 0f : attemptResultTracker.MaxHeight;
-            heightText.text = $"{maxHeight:0.0} м";
+            float height = rocketFlightController == null
+                ? 0f
+                : Mathf.Max(0f, rocketFlightController.HeightFromStart);
+
+            if (digitsOnly)
+            {
+                heightText.text = height.ToString(digitsFormat, CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                heightText.text = "Высота: " + height.ToString("0.0", CultureInfo.InvariantCulture);
+            }
         }
 
-        if (resultText != null)
+        if (stateText != null)
         {
-            float result = attemptResultTracker == null ? 0f : attemptResultTracker.FinalResult;
-
-            int displayValue = resultUsesMetersRounded
-                ? Mathf.RoundToInt(result)
-                : Mathf.RoundToInt(result * 10f);
-
-            displayValue = Mathf.Clamp(displayValue, 0, 9999);
-
-            resultText.text = padResultToFourDigits
-                ? displayValue.ToString("0000")
-                : displayValue.ToString();
+            bool isRunning = attemptSessionController != null && attemptSessionController.IsAttemptRunning;
+            stateText.text = isRunning ? "ИГРА ИДЕТ" : "ГОТОВО";
         }
 
         if (statusText != null)
         {
             statusText.text = BuildStatusText();
+        }
+
+        if (hintText != null)
+        {
+            hintText.text = BuildHintText();
         }
     }
 
@@ -129,15 +122,31 @@ public sealed class RocketHudPresenterTMP : MonoBehaviour
 
         if (inputModeController.CurrentMode == RocketInputModeController.InputMode.Voice)
         {
-            if (microphoneInputService == null)
-            {
-                return "Микрофон не назначен";
-            }
-
-            return microphoneInputService.StatusMessage;
+            return microphoneInputService == null
+                ? "Микрофон не назначен"
+                : microphoneInputService.StatusMessage;
         }
 
-        return "Space = тяга | 8 = микрофон | 9 = кнопка | 2 = выход";
+        return "Space = тяга";
+    }
+
+    private string BuildHintText()
+    {
+        bool isRunning = attemptSessionController != null && attemptSessionController.IsAttemptRunning;
+
+        if (isRunning)
+        {
+            return "Нажми 2 для перезапуска";
+        }
+
+        if (inputModeController == null)
+        {
+            return string.Empty;
+        }
+
+        return inputModeController.CurrentMode == RocketInputModeController.InputMode.Voice
+            ? "Кричи в микрофон, чтобы взлететь"
+            : "Удерживай пробел, чтобы взлететь";
     }
 
     private static float SmoothExp(float current, float target, float speed, float deltaTime)
