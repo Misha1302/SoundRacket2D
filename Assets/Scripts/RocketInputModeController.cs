@@ -8,16 +8,26 @@ public sealed class RocketInputModeController : MonoBehaviour
         Keyboard = 1
     }
 
+    [Header("Mode")]
     [SerializeField] private InputMode startMode = InputMode.Voice;
     [SerializeField] private MicrophoneInputService microphoneInputService;
     [SerializeField] private KeyboardInputService keyboardInputService;
 
-    public InputMode CurrentMode { get => startMode; private set => startMode = value; }
+    [Header("Hotkeys")]
+    [SerializeField] private KeyCode switchToVoiceKey = KeyCode.Alpha8;
+    [SerializeField] private KeyCode switchToKeyboardKey = KeyCode.Alpha9;
+
+    public InputMode CurrentMode { get; private set; }
     public float CurrentPower01 { get; private set; }
-    
+
+    private void Awake()
+    {
+        CurrentMode = startMode;
+    }
 
     private void Update()
     {
+        HandleModeHotkeys();
         CurrentPower01 = GetPowerByMode(CurrentMode);
     }
 
@@ -26,13 +36,33 @@ public sealed class RocketInputModeController : MonoBehaviour
         CurrentMode = mode;
     }
 
-    public void SwitchToVoice() => SetMode(InputMode.Voice);
+    public void SwitchToVoice()
+    {
+        SetMode(InputMode.Voice);
+    }
 
-    public void SwitchToKeyboard() => SetMode(InputMode.Keyboard);
+    public void SwitchToKeyboard()
+    {
+        SetMode(InputMode.Keyboard);
+    }
 
     public void ToggleMode()
     {
         SetMode(CurrentMode == InputMode.Voice ? InputMode.Keyboard : InputMode.Voice);
+    }
+
+    private void HandleModeHotkeys()
+    {
+        if (Input.GetKeyDown(switchToVoiceKey))
+        {
+            SwitchToVoice();
+            return;
+        }
+
+        if (Input.GetKeyDown(switchToKeyboardKey))
+        {
+            SwitchToKeyboard();
+        }
     }
 
     private float GetPowerByMode(InputMode mode)

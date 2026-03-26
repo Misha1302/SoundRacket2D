@@ -2,7 +2,8 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// Captures microphone loudness using Unity Microphone API and exposes normalized power (0..1).
+/// Captures microphone loudness using Unity Microphone API
+/// and exposes normalized power (0..1).
 /// </summary>
 public sealed class MicrophoneInputService : MonoBehaviour
 {
@@ -46,9 +47,15 @@ public sealed class MicrophoneInputService : MonoBehaviour
         }
     }
 
-    private void OnEnable() => StartCapture();
+    private void OnEnable()
+    {
+        StartCapture();
+    }
 
-    private void OnDisable() => StopCapture();
+    private void OnDisable()
+    {
+        StopCapture();
+    }
 
     private void Update()
     {
@@ -70,8 +77,15 @@ public sealed class MicrophoneInputService : MonoBehaviour
         }
 
         RawLoudness = ReadLatestWindowRms();
-        SmoothedLoudness = SmoothLoudness(SmoothedLoudness, RawLoudness, Time.deltaTime);
-        NormalizedLoudness01 = Mathf.Clamp01(Mathf.InverseLerp(silenceRms, loudRms, SmoothedLoudness));
+        SmoothedLoudness = InputSmoothing.SmoothExp(
+            SmoothedLoudness,
+            RawLoudness,
+            loudnessRiseSpeed,
+            loudnessFallSpeed,
+            Time.deltaTime);
+
+        NormalizedLoudness01 = Mathf.Clamp01(
+            Mathf.InverseLerp(silenceRms, loudRms, SmoothedLoudness));
     }
 
     public void StartCapture()
@@ -83,7 +97,7 @@ public sealed class MicrophoneInputService : MonoBehaviour
 
         ResetRuntimeState();
 
-        var deviceName = SelectMicrophoneDevice();
+        string deviceName = SelectMicrophoneDevice();
         if (string.IsNullOrEmpty(deviceName))
         {
             FailCapture("No microphone device detected.");
@@ -91,15 +105,16 @@ public sealed class MicrophoneInputService : MonoBehaviour
         }
 
         ActiveDeviceName = deviceName;
-        var sampleRate = ResolveSampleRate(deviceName, targetSampleRate);
+
+        int sampleRate = ResolveSampleRate(deviceName, targetSampleRate);
 
         try
         {
             microphoneClip = Microphone.Start(deviceName, true, clipLengthSeconds, sampleRate);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            FailCapture($"Failed to start microphone '{deviceName}': {ex.Message}");
+            FailCapture($"Failed to start microphone '{deviceName}': {exception.Message}");
             return;
         }
 
@@ -117,7 +132,7 @@ public sealed class MicrophoneInputService : MonoBehaviour
 
     public void StopCapture()
     {
-        var wasRunning = IsCapturing || waitingForStart;
+        bool wasRunning = IsCapturing || waitingForStart;
 
         waitingForStart = false;
         IsCapturing = false;
@@ -134,7 +149,6 @@ public sealed class MicrophoneInputService : MonoBehaviour
             }
             catch (Exception)
             {
-                // Ignore platform-specific stop errors to avoid noisy logs.
             }
         }
 
@@ -158,11 +172,20 @@ public sealed class MicrophoneInputService : MonoBehaviour
         StartCapture();
     }
 
-    public float GetSoundLoudness() => SmoothedLoudness;
+    public float GetSoundLoudness()
+    {
+        return SmoothedLoudness;
+    }
 
-    public float GetSoundLoudnessRaw() => RawLoudness;
+    public float GetSoundLoudnessRaw()
+    {
+        return RawLoudness;
+    }
 
-    public float GetNormalizedLoudness01() => NormalizedLoudness01;
+    public float GetNormalizedLoudness01()
+    {
+        return NormalizedLoudness01;
+    }
 
     private void PollForCaptureStart()
     {
@@ -177,9 +200,9 @@ public sealed class MicrophoneInputService : MonoBehaviour
         {
             position = Microphone.GetPosition(ActiveDeviceName);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            FailCapture($"Unable to query microphone position: {ex.Message}");
+            FailCapture($"Unable to query microphone position: {exception.Message}");
             return;
         }
 
@@ -206,15 +229,16 @@ public sealed class MicrophoneInputService : MonoBehaviour
             return 0f;
         }
 
-        var writePosition = Microphone.GetPosition(ActiveDeviceName);
+        int writePosition = Microphone.GetPosition(ActiveDeviceName);
         if (writePosition < 0)
         {
             return 0f;
         }
 
-        var clipSamples = microphoneClip.samples;
-        var windowSize = sampleBuffer.Length;
-        var readPosition = writePosition - windowSize;
+        int clipSamples = microphoneClip.samples;
+        int windowSize = sampleBuffer.Length;
+        int readPosition = writePosition - windowSize;
+
         if (readPosition < 0)
         {
             readPosition += clipSamples;
@@ -226,25 +250,20 @@ public sealed class MicrophoneInputService : MonoBehaviour
         }
 
         double sumSquares = 0d;
-        for (var i = 0; i < windowSize; i++)
+
+        for (int i = 0; i < windowSize; i++)
         {
-            var sample = sampleBuffer[i];
+            float sample = sampleBuffer[i];
             sumSquares += sample * sample;
         }
 
         return Mathf.Sqrt((float)(sumSquares / windowSize));
     }
 
-    private float SmoothLoudness(float current, float target, float deltaTime)
-    {
-        var speed = target > current ? loudnessRiseSpeed : loudnessFallSpeed;
-        var t = 1f - Mathf.Exp(-speed * deltaTime);
-        return Mathf.Lerp(current, target, t);
-    }
-
     private string SelectMicrophoneDevice()
     {
-        var devices = Microphone.devices;
+        string[] devices = Microphone.devices;
+
         if (devices == null || devices.Length == 0)
         {
             return string.Empty;
@@ -252,7 +271,7 @@ public sealed class MicrophoneInputService : MonoBehaviour
 
         if (!string.IsNullOrWhiteSpace(preferredDeviceName))
         {
-            for (var i = 0; i < devices.Length; i++)
+            for (int i = 0; i < devices.Length; i++)
             {
                 if (string.Equals(devices[i], preferredDeviceName, StringComparison.OrdinalIgnoreCase))
                 {
@@ -268,7 +287,8 @@ public sealed class MicrophoneInputService : MonoBehaviour
     {
         try
         {
-            Microphone.GetDeviceCaps(deviceName, out var minFreq, out var maxFreq);
+            Microphone.GetDeviceCaps(deviceName, out int minFreq, out int maxFreq);
+
             if (minFreq == 0 && maxFreq == 0)
             {
                 return requestedRate;
@@ -289,7 +309,8 @@ public sealed class MicrophoneInputService : MonoBehaviour
 
     private void FailCapture(string reason)
     {
-        var wasRunning = IsCapturing || waitingForStart;
+        bool wasRunning = IsCapturing || waitingForStart;
+
         StopCapture();
         StatusMessage = reason;
 
