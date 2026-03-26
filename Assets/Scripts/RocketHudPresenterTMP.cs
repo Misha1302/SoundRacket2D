@@ -86,14 +86,9 @@ public sealed class RocketHudPresenterTMP : MonoBehaviour
                 ? 0f
                 : Mathf.Max(0f, rocketFlightController.HeightFromStart);
 
-            if (digitsOnly)
-            {
-                heightText.text = height.ToString(digitsFormat, CultureInfo.InvariantCulture);
-            }
-            else
-            {
-                heightText.text = "Высота: " + height.ToString("0.0", CultureInfo.InvariantCulture);
-            }
+            heightText.text = digitsOnly
+                ? height.ToString(digitsFormat, CultureInfo.InvariantCulture)
+                : "Высота: " + height.ToString("0.0", CultureInfo.InvariantCulture);
         }
 
         if (stateText != null)
