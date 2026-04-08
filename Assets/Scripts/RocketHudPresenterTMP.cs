@@ -18,7 +18,6 @@ public sealed class RocketHudPresenterTMP : MonoBehaviour
     [SerializeField] private TMP_Text hintText;
 
     [Header("Power Visual")]
-    [SerializeField] private Image powerFillImage;
     [SerializeField] private Image[] powerBars;
     [SerializeField] private Color activeBarColor = new Color(1f, 0.72f, 0.18f, 1f);
     [SerializeField] private Color inactiveBarColor = new Color(1f, 0.72f, 0.18f, 0.08f);
@@ -26,15 +25,41 @@ public sealed class RocketHudPresenterTMP : MonoBehaviour
 
     [Header("Height Text")]
     [SerializeField] private bool digitsOnly = true;
+    [SerializeField] private float heightScale = 10;
     [SerializeField] private string digitsFormat = "000.0";
 
     private float _displayedPower01;
 
+    public void Setup(
+        RocketInputModeController newInputModeController,
+        RocketFlightController newRocketFlightController,
+        MicrophoneInputService newMicrophoneInputService,
+        AttemptSessionController newAttemptSessionController,
+        TMP_Text newModeText,
+        TMP_Text newHeightText,
+        TMP_Text newStateText,
+        TMP_Text newStatusText,
+        TMP_Text newHintText,
+        Image[] newPowerBars)
+    {
+        inputModeController = newInputModeController;
+        rocketFlightController = newRocketFlightController;
+        microphoneInputService = newMicrophoneInputService;
+        attemptSessionController = newAttemptSessionController;
+
+        modeText = newModeText;
+        heightText = newHeightText;
+        stateText = newStateText;
+        statusText = newStatusText;
+        hintText = newHintText;
+        powerBars = newPowerBars;
+    }
+
     private void Update()
     {
-        float rawPower01 = inputModeController == null
+        float rawPower01 = rocketFlightController == null
             ? 0f
-            : Mathf.Clamp01(inputModeController.CurrentPower01);
+            : rocketFlightController.CurrentSpeed01;
 
         _displayedPower01 = SmoothExp(_displayedPower01, rawPower01, powerSmoothSpeed, Time.deltaTime);
 
@@ -44,11 +69,6 @@ public sealed class RocketHudPresenterTMP : MonoBehaviour
 
     private void UpdatePowerVisuals(float power01)
     {
-        if (powerFillImage != null)
-        {
-            powerFillImage.fillAmount = power01;
-        }
-
         if (powerBars == null || powerBars.Length == 0)
         {
             return;
@@ -67,7 +87,7 @@ public sealed class RocketHudPresenterTMP : MonoBehaviour
             }
 
             bar.enabled = true;
-            bar.color = i < activeCount ? activeBarColor : inactiveBarColor;
+            bar.color = i < activeCount ? new Color(activeBarColor.r, activeBarColor.g, activeBarColor.b, 1f / 10f * (i + 1)) : inactiveBarColor;
         }
     }
 
@@ -85,6 +105,7 @@ public sealed class RocketHudPresenterTMP : MonoBehaviour
             float height = rocketFlightController == null
                 ? 0f
                 : Mathf.Max(0f, rocketFlightController.HeightFromStart);
+            height *= heightScale;
 
             heightText.text = digitsOnly
                 ? height.ToString(digitsFormat, CultureInfo.InvariantCulture)

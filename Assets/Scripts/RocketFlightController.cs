@@ -6,35 +6,65 @@ public sealed class RocketFlightController : MonoBehaviour
     [SerializeField] private RocketInputModeController inputModeController;
     [SerializeField, Min(0.1f)] private float maxVerticalSpeed = 8f;
 
-    private Rigidbody2D rb;
-    private Vector3 startPosition;
-    private Quaternion startRotation;
+    private Rigidbody2D _rb;
+    private Vector3 _startPosition;
+    private Quaternion _startRotation;
 
-    public float HeightFromStart => transform.position.y - startPosition.y;
+    public float HeightFromStart => transform.position.y - _startPosition.y;
+    public float MaxVerticalSpeed => maxVerticalSpeed;
+
+    public float CurrentUpwardSpeed
+    {
+        get
+        {
+            if (_rb == null)
+            {
+                return 0f;
+            }
+
+            return Mathf.Max(0f, _rb.velocity.y);
+        }
+    }
+
+    public float CurrentSpeed01
+    {
+        get
+        {
+            if (maxVerticalSpeed <= 0.0001f)
+            {
+                return 0f;
+            }
+
+            return Mathf.Clamp01(CurrentUpwardSpeed / maxVerticalSpeed);
+        }
+    }
 
     private void Awake()
     {
-        rb = GetComponent<Rigidbody2D>();
-        startPosition = transform.position;
-        startRotation = transform.rotation;
+        _rb = GetComponent<Rigidbody2D>();
+        _startPosition = transform.position;
+        _startRotation = transform.rotation;
     }
 
     private void FixedUpdate()
     {
-        var power01 = inputModeController.CurrentPower01;
-        rb.velocity = new Vector2(rb.velocity.x, power01 * maxVerticalSpeed);
+        float power01 = inputModeController == null
+            ? 0f
+            : inputModeController.CurrentPower01;
+
+        _rb.velocity = new Vector2(_rb.velocity.x, power01 * maxVerticalSpeed);
     }
 
     public void ResetToStart()
     {
-        rb.velocity = Vector2.zero;
-        rb.angularVelocity = 0f;
-        transform.SetPositionAndRotation(startPosition, startRotation);
+        _rb.velocity = Vector2.zero;
+        _rb.angularVelocity = 0f;
+        transform.SetPositionAndRotation(_startPosition, _startRotation);
     }
 
     public void SetCurrentAsStart()
     {
-        startPosition = transform.position;
-        startRotation = transform.rotation;
+        _startPosition = transform.position;
+        _startRotation = transform.rotation;
     }
 }
